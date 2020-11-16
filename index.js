@@ -1,16 +1,22 @@
 const puppeteer = require('puppeteer');
 
-const productPageUrl = ''
-const cartPageUrl = ''
+const productEndpoint = encodeURIComponent('/ip/Flash-Cards-Numbers-1-100-School-Zone/1525638')
+const loginPageUrl = `https://www.walmart.com/account/login?returnUrl=${productEndpoint}`
+const productPageUrl = 'https://www.walmart.com/ip/Flash-Cards-Numbers-1-100-School-Zone/1525638'
+const checkoutPageUrl = 'https://www.walmart.com/checkout'
 
 ///Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222 --no-first-run --no-default-browser-check --user-data-dir=$(mktemp -d -t 'chrome-remote_data_dir')
-const websocketUrls = []
+const websocketUrls = [
+  'ws://127.0.0.1:9222/devtools/browser/1d29af26-9891-45e0-adee-163e4eaba2a2',
+  'ws://127.0.0.1:9111/devtools/browser/5bdaaf3d-b161-4ccf-8096-38b06ddef776',
+  'ws://127.0.0.1:9112/devtools/browser/ee8f5955-bfdf-41ff-a1a0-95af39e43772'
+]
 let websocketIndex = 0
 
+const signInText = 'Sign in'
 const addToCartText = 'Add to cart'
 const checkoutText = 'Check out'
 const continueText = 'Continue'
-
 class Container {
   constructor() {
     this.browser = null
@@ -27,9 +33,14 @@ class Container {
     //   ]
     // });
     console.log('Connecting to:', websocketUrls[websocketIndex]);
-    this.browser = await puppeteer.connect({
-      browserWSEndpoint: websocketUrls[websocketIndex],
-    });
+    try {
+      this.browser = await puppeteer.connect({
+        browserWSEndpoint: websocketUrls[websocketIndex],
+      });
+    } catch (err) {
+      console.log(err)
+      throw new Error(err)
+    }
     websocketIndex++
   }
 
@@ -42,7 +53,7 @@ class Container {
     }
   }
   async resizeWindow(page, width, height) {
-    await page.setViewport({height, width});
+    await page.setViewport({ height, width });
 
     // Window frame - probably OS and WM dependent.
     height += 85;
@@ -54,14 +65,14 @@ class Container {
     const target = targets.targetInfos.filter(t => t.attached === true && t.type === 'page')[0]
 
     // Tab window.
-    const {windowId} = await this.browser._connection.send(
+    const { windowId } = await this.browser._connection.send(
       'Browser.getWindowForTarget',
-      {targetId: target.targetId}
+      { targetId: target.targetId }
     );
 
     // Resize.
     await this.browser._connection.send('Browser.setWindowBounds', {
-      bounds: {height, width},
+      bounds: { height, width },
       windowId
     });
   }
@@ -87,6 +98,14 @@ const checkCartFull = async (page) => {
   return false
 }
 
+const checkOutOfStock = async (page) => {
+  const isOutOfStock = await page.$('.prod-ProductOffer-oosMsg')
+  while (isOutOfStock) {
+    page.refresh(true)
+    await delay(2000)
+  }
+}
+
 const waitForUrlElement = async (page, element) => {
   let url = page.url()
   while (!url.includes(element)) {
@@ -98,7 +117,7 @@ const waitForUrlElement = async (page, element) => {
 
 const waitForElement = async (page, element) => {
   let pageElement
-  while(!pageElement) {
+  while (!pageElement) {
     console.log(`Waiting for page element ${element}`);
     pageElement = await page.$(element)
     await delay(1000)
@@ -122,15 +141,24 @@ const pressButton = async (page, selector) => {
   await button.click({ force: true })
 }
 
+const login = async (container, page) => {
+  await page.goto(loginPageUrl, { waitUntil: 'domcontentloaded' })
+  await waitForElement(page, '#email')
+  await page.type('#email', 'jcast90@me.com')
+  await page.type('#password', 'Foundation1?')
+  await pressButton(page, signInText)
+}
+
 const doThings = async (container, page) => {
   let shortCircuitCartNav = false
   await page.goto(productPageUrl, { waitUntil: 'domcontentloaded' })
+  await checkOutOfStock(page)
   await pressButton(page, addToCartText)
   checkCartFull(page).then(async (isFull) => {
     if (isFull) {
       console.log('Cart is full, forcing alternate nav');
       shortCircuitCartNav = true
-      await page.goto(cartPageUrl)
+      await page.goto(checkoutPageUrl)
       await waitForUrlElement(page, 'fulfillment')
       await pressButton(page, continueText)
       // await waitForUrlElement(page, 'shipping-address')
@@ -159,9 +187,10 @@ const doThings = async (container, page) => {
 }
 
 (async () => {
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < websocketUrls.length; i++) {
     const container = await start();
     const { page } = await container.addPage()
+    await login(container, page)
     doThings(container, page)
   }
 })()
