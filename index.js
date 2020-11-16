@@ -1,16 +1,16 @@
 const puppeteer = require('puppeteer');
 
-const productEndpoint = encodeURIComponent('/ip/Flash-Cards-Numbers-1-100-School-Zone/1525638')
-const loginPageUrl = `https://www.walmart.com/account/login?returnUrl=${productEndpoint}`
-const productPageUrl = 'https://www.walmart.com/ip/Flash-Cards-Numbers-1-100-School-Zone/1525638'
+const email = '' // insert walmart email
+const password = '' // insert walmart password
+const productPathName = encodeURIComponent('/ip/Flash-Cards-Numbers-1-100-School-Zone/1525638') // insert the product pathname
+const loginPageUrl = `https://www.walmart.com/account/login?returnUrl=${productPathName}`
+const productPageUrl = '' // insert your product url
 const checkoutPageUrl = 'https://www.walmart.com/checkout'
 
 ///Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222 --no-first-run --no-default-browser-check --user-data-dir=$(mktemp -d -t 'chrome-remote_data_dir')
-const websocketUrls = [
-  'ws://127.0.0.1:9222/devtools/browser/1d29af26-9891-45e0-adee-163e4eaba2a2',
-  'ws://127.0.0.1:9111/devtools/browser/5bdaaf3d-b161-4ccf-8096-38b06ddef776',
-  'ws://127.0.0.1:9112/devtools/browser/ee8f5955-bfdf-41ff-a1a0-95af39e43772'
-]
+// TODO: dynamically populate this somehow?
+const websocketUrls = []
+
 let websocketIndex = 0
 
 const signInText = 'Sign in'
@@ -24,6 +24,7 @@ class Container {
   }
 
   async launchBrowser(chromeWebsocket) {
+    // TODO: Do we need this here?
     // this.browser = await puppeteer.launch({
     //   executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     //   headless: false,
@@ -101,9 +102,12 @@ const checkCartFull = async (page) => {
 const checkOutOfStock = async (page) => {
   const isOutOfStock = await page.$('.prod-ProductOffer-oosMsg')
   while (isOutOfStock) {
+    console.log('product is out of stock')
     page.refresh(true)
-    await delay(2000)
+    await delay(1000)
+    timer++
   }
+  console.log('product is in stock!!')
 }
 
 const waitForUrlElement = async (page, element) => {
@@ -144,8 +148,8 @@ const pressButton = async (page, selector) => {
 const login = async (container, page) => {
   await page.goto(loginPageUrl, { waitUntil: 'domcontentloaded' })
   await waitForElement(page, '#email')
-  await page.type('#email', 'jcast90@me.com')
-  await page.type('#password', 'Foundation1?')
+  await page.type('#email', email)
+  await page.type('#password', password)
   await pressButton(page, signInText)
 }
 

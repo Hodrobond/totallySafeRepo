@@ -4,7 +4,7 @@
   },
   "scripts": {
     "start": "node index.js",
-    "startBrowsers": "npm run webBrowser1 && npm run webBrowser2 && npm run webBrowser3",
+    "startBrowsers": "npm run webBrowser1 && npm run webBrowser2 && npm run webBrowser3 && npm run webBrowser4 && npm run webBrowser5",
     "webBrowser1": "ttab /Applications/Google\\ Chrome.app/Contents/MacOS/Google\\ Chrome --remote-debugging-port=9222 --no-first-run --no-default-browser-check --user-data-dir=$(mktemp -d -t 'chrome-remote_data_dir')",
     "webBrowser2": "ttab /Applications/Google\\ Chrome.app/Contents/MacOS/Google\\ Chrome --remote-debugging-port=9111 --no-first-run --no-default-browser-check --user-data-dir=$(mktemp -d -t 'chrome-remote_data_dir')",
     "webBrowser3": "ttab /Applications/Google\\ Chrome.app/Contents/MacOS/Google\\ Chrome --remote-debugging-port=9112 --no-first-run --no-default-browser-check --user-data-dir=$(mktemp -d -t 'chrome-remote_data_dir')",
