@@ -2,7 +2,7 @@ const puppeteer = require('puppeteer');
 
 const email = '' // insert walmart email
 const password = '' // insert walmart password
-const productPathName = encodeURIComponent('/ip/Flash-Cards-Numbers-1-100-School-Zone/1525638') // insert the product pathname
+const productPathName = encodeURIComponent('') // insert the product pathname
 const loginPageUrl = `https://www.walmart.com/account/login?returnUrl=${productPathName}`
 const productPageUrl = '' // insert your product url
 const checkoutPageUrl = 'https://www.walmart.com/checkout'
