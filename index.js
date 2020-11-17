@@ -1,17 +1,13 @@
 const puppeteer = require('puppeteer');
+const utils = require('./utils')
 
-const email = '' // insert walmart email
-const password = '' // insert walmart password
+const userEmail = '' // insert walmart email
+const userPassword = '' // insert walmart password
 const productPathName = encodeURIComponent('') // insert the product pathname
 const loginPageUrl = `https://www.walmart.com/account/login?returnUrl=${productPathName}`
-const productPageUrl = '' // insert your product url
+// const productPageUrl = 'https://www.walmart.com/ip/Sony-PlayStation-5-Digital-Edition/493824815'
+const productPageUrl = 'https://www.walmart.com/ip/Flash-Card-Multiplication-0-12-Flashcards-Other/206336'
 const checkoutPageUrl = 'https://www.walmart.com/checkout'
-
-///Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222 --no-first-run --no-default-browser-check --user-data-dir=$(mktemp -d -t 'chrome-remote_data_dir')
-// TODO: dynamically populate this somehow?
-const websocketUrls = []
-
-let websocketIndex = 0
 
 const signInText = 'Sign in'
 const addToCartText = 'Add to cart'
@@ -20,32 +16,31 @@ const continueText = 'Continue'
 class Container {
   constructor() {
     this.browser = null
+    // some pages will probably allow action w/o tab focus
     this.pages = []
   }
 
-  async launchBrowser(chromeWebsocket) {
-    // TODO: Do we need this here?
-    // this.browser = await puppeteer.launch({
-    //   executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-    //   headless: false,
-    //   // defaultViewport: null,
-    //   args: [
-    //     '--window-size=10,10'
-    //   ]
-    // });
-    console.log('Connecting to:', websocketUrls[websocketIndex]);
+  act({
+    type,
+    opts
+  }){
+    return this[type](opts)
+  }
+
+  async launchBrowser(index) {
     try {
-      this.browser = await puppeteer.connect({
-        browserWSEndpoint: websocketUrls[websocketIndex],
-      });
+      console.log('LAUNCHING:')
+      this.browser = await puppeteer.launch({
+        headless: false,
+        userDataDir: `~/Documents/Chrome_data/${index}`,
+      })
     } catch (err) {
       console.log(err)
       throw new Error(err)
     }
-    websocketIndex++
   }
 
-  async addPage(url) {
+  async addPage() {
     const page = await this.browser.newPage();
     this.pages.push(page)
     return {
@@ -53,37 +48,69 @@ class Container {
       index: this.pages.length - 1
     }
   }
-  async resizeWindow(page, width, height) {
-    await page.setViewport({ height, width });
+  // Page nav utils
+  async goto({ url, opts, pageIndex = 0 } = {}) {
+    console.log('GOTO:', url)
+    await this.pages[pageIndex].goto(url, {
+      timeout: 0,
+      ...opts,
+    })
+    return true
+  }
 
-    // Window frame - probably OS and WM dependent.
+  async getButtonWithText({ text, pageIndex = 0, disabled = false } = {}) {
+    console.log('Get button:', text)
+    const [button] = await this.pages[pageIndex].$x(`//button[contains(., '${text}')][not(@disabled)]`);
+    return button
+  }
+
+  async typeText({ selector, text, pageIndex = 0 } = {}) {
+    console.log('TYPE:', text)
+    await this.pages[pageIndex].type(selector, text)
+  }
+
+  async pressButton({ text, waitForNavigation } = {}){
+    console.log('Press button:', text)
+    let button = await this.getButtonWithText({ text })
+    if (button) {
+      await button.click()
+    }
+    if (waitForNavigation) {
+      await page.waitForNavigation()
+    }
+    return button
+  }
+
+  async getElement({ element, pageIndex = 0 } = {}) {
+    console.log('Get Element:', element)
+    const pageElement = await this.pages[pageIndex].$(element)
+    return pageElement
+  }
+
+  async waitForUrlElement({ element, pageIndex = 0 } = {}) {
+    console.log('Wait for URL:', element)
+    const url = this.pages[pageIndex].url()
+    console.log('is it there?:', url)
+    return url.includes(element)
+  }
+
+  // Other utils
+  async resizeWindow({ pageIndex = 0, width = 1280, height = 800 } = {}) {
+    await this.pages[pageIndex].setViewport({ height, width });
     height += 85;
-    // Any tab.
     const targets = await this.browser._connection.send(
       'Target.getTargets'
     )
-
     const target = targets.targetInfos.filter(t => t.attached === true && t.type === 'page')[0]
-
-    // Tab window.
     const { windowId } = await this.browser._connection.send(
       'Browser.getWindowForTarget',
       { targetId: target.targetId }
     );
-
-    // Resize.
     await this.browser._connection.send('Browser.setWindowBounds', {
       bounds: { height, width },
       windowId
     });
   }
-}
-
-const delay = (time) => new Promise((resolve) => setTimeout(resolve, time))
-
-const getButtonWithText = async (page, text) => {
-  const [button] = await page.$x(`//button[contains(., '${text}')][not(@disabled)]`);
-  return button
 }
 
 const checkCartFull = async (page) => {
@@ -94,7 +121,7 @@ const checkCartFull = async (page) => {
     if (isCartFull) {
       return true
     }
-    await delay(2000)
+    await utils.delay(2000)
   }
   return false
 }
@@ -104,97 +131,119 @@ const checkOutOfStock = async (page) => {
   while (isOutOfStock) {
     console.log('product is out of stock')
     page.refresh(true)
-    await delay(1000)
+    await utils.delay(1000)
     timer++
   }
   console.log('product is in stock!!')
 }
 
-const waitForUrlElement = async (page, element) => {
-  let url = page.url()
-  while (!url.includes(element)) {
-    console.log(`Waiting for URL to include: ${element}`);
-    await delay(1000)
-    url = page.url()
-  }
-}
-
-const waitForElement = async (page, element) => {
-  let pageElement
-  while (!pageElement) {
-    console.log(`Waiting for page element ${element}`);
-    pageElement = await page.$(element)
-    await delay(1000)
-  }
-}
-
-const start = async () => {
-  const container = new Container()
-  await container.launchBrowser();
-  return container
-}
-
-const pressButton = async (page, selector) => {
-  console.log(`Getting ${selector} button`)
-  let button = await getButtonWithText(page, selector)
-
-  while (!button) {
-    await delay(1000)
-    button = await getButtonWithText(page, selector)
-  }
-  await button.click({ force: true })
-}
-
-const login = async (container, page) => {
-  await page.goto(loginPageUrl, { waitUntil: 'domcontentloaded' })
-  await waitForElement(page, '#email')
-  await page.type('#email', email)
-  await page.type('#password', password)
-  await pressButton(page, signInText)
-}
-
-const doThings = async (container, page) => {
-  let shortCircuitCartNav = false
-  await page.goto(productPageUrl, { waitUntil: 'domcontentloaded' })
-  await checkOutOfStock(page)
-  await pressButton(page, addToCartText)
-  checkCartFull(page).then(async (isFull) => {
-    if (isFull) {
-      console.log('Cart is full, forcing alternate nav');
-      shortCircuitCartNav = true
-      await page.goto(checkoutPageUrl)
-      await waitForUrlElement(page, 'fulfillment')
-      await pressButton(page, continueText)
-      // await waitForUrlElement(page, 'shipping-address')
-      await waitForElement(page, '.address-grid')
-      await pressButton(page, continueText)
-      // await waitForUrlElement(page, 'payment')
-
-      container.resizeWindow(page, 1280, 800)
+const login = [
+  {
+    type: 'goto',
+    opts: {
+      url: 'https://www.walmart.com/account/login'
     }
-  })
-  console.log('Waiting for nav');
-  await page.waitForNavigation()
-  if (shortCircuitCartNav) {
-    console.log('Short circuit exiting to prevent duplicate searches');
-    return
+  },
+  {
+    type: 'typeText',
+    opts: {
+      selector: '#email',
+      text: userEmail
+    }
+  },
+  {
+    type: 'typeText',
+    opts: {
+      selector: '#password',
+      text: userPassword
+    }
+  },
+  {
+    type: 'pressButton',
+    opts: {
+      text: signInText,
+      waitForNavigation: true,
+    }
   }
-  await pressButton(page, checkoutText)
-  await waitForUrlElement(page, 'fulfillment')
-  await pressButton(page, continueText)
-  // await waitForUrlElement(page, 'shipping-address')
-  await waitForElement(page, '.address-grid')
-  await pressButton(page, continueText)
-  // await waitForUrlElement(page, 'payment')
+]
 
-  container.resizeWindow(page, 1792, 1120)
+const config = [
+  // ...login,
+  {
+    type: 'goto',
+    opts: {
+      url: productPageUrl
+    }
+  },
+  {
+    type: 'pressButton',
+    opts: {
+      text: addToCartText,
+    },
+    wait: true,
+  },
+  {
+    type: 'goto',
+    opts: {
+      url: checkoutPageUrl,
+    },
+    skip: 1
+  },
+  {
+    type: 'waitForUrlElement',
+    opts: {
+      element: 'fulfillment',
+    },
+    wait: true,
+  },
+  {
+    type: 'pressButton',
+    opts: {
+      text: continueText,
+    },
+    wait: true,
+  },
+  {
+    type: 'getElement',
+    opts: {
+      element: '.address-grid',
+    },
+    wait: true,
+  },
+  {
+    type: 'pressButton',
+    opts: {
+      text: continueText,
+    },
+    wait: true,
+  },
+  {
+    type: 'resizeWindow',
+    wait: true,
+  }
+]
+
+const start = async (index) => {
+  const delay = 1000
+  const container = new Container()
+  await container.launchBrowser(index);
+  await container.addPage()
+  const tempConfig = [...config]
+  while(tempConfig.length) {
+    const actor = tempConfig.shift()
+    const result = await container.act(actor)
+    if (actor.wait && !result) {
+      tempConfig.unshift(actor)
+      await utils.delay(delay)
+    }
+  }
 }
 
 (async () => {
-  for (let i = 0; i < websocketUrls.length; i++) {
-    const container = await start();
-    const { page } = await container.addPage()
-    await login(container, page)
-    doThings(container, page)
+  const limit = 5
+  // const sockets = await utils.openNWebsockets(limit)
+  // console.log('got sockets:', sockets)
+  for (let i = 0; i < limit; i++) {
+    start(i)
   }
 })()
