@@ -69,14 +69,14 @@ class Container {
     await this.pages[pageIndex].type(selector, text)
   }
 
-  async pressButton({ text, waitForNavigation } = {}){
+  async pressButton({ text, waitForNavigation, pageIndex = 0 } = {}){
     console.log('Press button:', text)
     let button = await this.getButtonWithText({ text })
     if (button) {
       await button.click()
     }
     if (waitForNavigation) {
-      await page.waitForNavigation()
+      await this.pages[pageIndex].waitForNavigation()
     }
     return button
   }
