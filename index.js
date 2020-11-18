@@ -125,7 +125,7 @@ class Container {
     if (waitForNavigation) {
       await this.pages[pageIndex].waitForNavigation()
     }
-    return button
+    return true
   }
 
   async getElement({ element, pageIndex = 0 } = {}) {
@@ -239,6 +239,7 @@ const config2 = {
       type: "pressButton",
       opts: {
         text: "Add to cart",
+        waitForNavigation: true
       }
     },
     goto: ['checkCartFull', 'cartFlow1'],
@@ -279,6 +280,22 @@ const config2 = {
     goto: ['cartFlow1']
   },
   cartFlow1: {
+    condition: {
+      type: 'getButtonWithText',
+      opts: {
+        text: 'Check out',
+        disabled: false,
+      }
+    },
+    action: {
+      type: 'pressButton',
+      opts: {
+        text: 'Check out'
+      }
+    },
+    goto: ['checkoutFlow1']
+  },
+  checkoutFlow1: {
     condition: {
       type: 'waitForUrlElement',
       opts: {
