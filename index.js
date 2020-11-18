@@ -27,6 +27,49 @@ class Container {
     return this[type](opts)
   }
 
+  async rules(stack){
+    console.log('stack')
+    console.log(stack)
+    const operations = stack.map(this.evaluateRule.bind(this))
+    console.log('got operations')
+    const firstEvaluated = await Promise.any(operations)
+    return firstEvaluated
+  }
+  /*
+  condition: {
+    type: "elementExists",
+    opts: {
+      selector: "",
+      disabled: false,
+    },
+    required: true
+  },
+  */
+  async evaluateRule({ condition, action, goto }){
+    console.log('evaluating')
+    console.log(condition)
+    console.log(action)
+    console.log(goto)
+    let evaluated
+    if (condition) {
+      evaluated = await this.evaluateCondition(condition)
+    } else {
+      evaluated = true
+    }
+    if (evaluated) {
+      await this.performAction(action)
+      if (goto) return goto
+    }
+  }
+
+  async evaluateCondition({ type, opts }){
+    return this[type](opts)
+  }
+
+  async performAction({ type, opts }){
+    return this[type](opts)
+  }
+
   async launchBrowser(index) {
     try {
       console.log('LAUNCHING:')
@@ -56,6 +99,10 @@ class Container {
       ...opts,
     })
     return true
+  }
+
+  async refresh({ opts, pageIndex = 0 }) {
+    await this.pages[pageIndex].refresh()
   }
 
   async getButtonWithText({ text, pageIndex = 0, disabled = false } = {}) {
@@ -88,10 +135,12 @@ class Container {
   }
 
   async waitForUrlElement({ element, pageIndex = 0 } = {}) {
-    console.log('Wait for URL:', element)
     const url = this.pages[pageIndex].url()
-    console.log('is it there?:', url)
-    return url.includes(element)
+    while (!url.includes(element)) {
+      await delay(1000)
+      url = this.pages[pageIndex].url()
+    }
+    return true
   }
 
   // Other utils
@@ -167,82 +216,106 @@ const login = [
   }
 ]
 
-const config = [
-  // ...login,
-  {
-    type: 'goto',
-    opts: {
-      url: productPageUrl
+const config2 = {
+  goToProductPage: {
+    condition: null,
+    action: {
+      type: 'goto',
+      opts: {
+        url: productPageUrl
+      }
+    },
+    goto: ['canAddToCart','addToCartDisabled']
+  },
+  canAddToCart: {
+    condition: {
+      type: "getButtonWithText",
+      opts: {
+        text: "Add to cart",
+        disabled: false,
+      },
+    },
+    action: {
+      type: "pressButton",
+      opts: {
+        text: "Add to cart",
+      }
+    },
+    goto: ['checkCartFull', 'cartFlow1'],
+  },
+  addToCartDisabled: {
+    condition: {
+      type: "getButtonWithText",
+      opts: {
+        text: "Add to cart",
+        disabled: true,
+      },
+    },
+    action: {
+      type: "refresh"
+    },
+    goto: ['canAddToCart', 'addToCartDisabled']
+  },
+  waitForNavigationToCart: {
+    condition: null,
+    action: {
+      type: 'waitForNavigation'
+    },
+    goto: ['cartFlow1']
+  },
+  checkCartFull: {
+    condition: {
+      type: "getElement",
+      opts: {
+        element: '.max-quantity-msg'
+      }
+    },
+    action: {
+      type: 'goto',
+      opts: {
+        url: checkoutPageUrl
+      }
+    },
+    goto: ['cartFlow1']
+  },
+  cartFlow1: {
+    condition: {
+      type: 'waitForUrlElement',
+      opts: {
+        element: 'fulfillment'
+      }
+    },
+    action: {
+      type: 'pressButton',
+      opts: {
+        text: continueText
+      }
     }
-  },
-  {
-    type: 'pressButton',
-    opts: {
-      text: addToCartText,
-    },
-    wait: true,
-  },
-  {
-    type: 'goto',
-    opts: {
-      url: checkoutPageUrl,
-    },
-    skip: 1
-  },
-  {
-    type: 'waitForUrlElement',
-    opts: {
-      element: 'fulfillment',
-    },
-    wait: true,
-  },
-  {
-    type: 'pressButton',
-    opts: {
-      text: continueText,
-    },
-    wait: true,
-  },
-  {
-    type: 'getElement',
-    opts: {
-      element: '.address-grid',
-    },
-    wait: true,
-  },
-  {
-    type: 'pressButton',
-    opts: {
-      text: continueText,
-    },
-    wait: true,
-  },
-  {
-    type: 'resizeWindow',
-    wait: true,
   }
-]
+  // cartFlow: { ...logic for traversing through cart and checkout }
+}
 
 const start = async (index) => {
-  const delay = 1000
   const container = new Container()
   await container.launchBrowser(index);
   await container.addPage()
-  const tempConfig = [...config]
-  while(tempConfig.length) {
-    const actor = tempConfig.shift()
-    const result = await container.act(actor)
-    if (actor.wait && !result) {
-      tempConfig.unshift(actor)
-      await utils.delay(delay)
+  let stack = [config2.goToProductPage]
+  while(stack.length) {
+    const result = await container.rules(stack)
+    console.log('result')
+    console.log(result)
+    if (Array.isArray(result)) {
+      stack = result.map(name => config2[name])
+    } else if (result) {
+      stack = [config2[result]]
+    } else {
+      console.log('Done')
     }
   }
 }
 
 (async () => {
-  const limit = 5
-  // const sockets = await utils.openNWebsockets(limit)
-  // console.log('got sockets:', sockets)
+  const limit = 1
   for (let i = 0; i < limit; i++) {
     start(i)
   }
