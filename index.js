@@ -241,6 +241,16 @@ const login = {
 
 const config2 = {
   ...login,
+  goToProductPage: {
+    condition: null,
+    action: {
+      type: 'goto',
+      opts: {
+        url: productPageUrl
+      }
+    },
+    goto: ['canAddToCart', 'addToCartDisabled']
+  },
   canAddToCart: {
     condition: {
       type: "getButtonWithText",
@@ -330,7 +340,8 @@ const start = async (index) => {
   const container = new Container()
   await container.launchBrowser(index);
   await container.addPage()
-  let stack = [config2.goToLoginPage]
+  // maybe check login  somehow?
+  let stack = [config2.login]
   let counter = 0
   while (stack.length && counter < 30) {
     const result = await container.rules(stack)
