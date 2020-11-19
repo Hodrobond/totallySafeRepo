@@ -3,7 +3,7 @@ const utils = require('./utils')
 
 const userEmail = '' // insert walmart email
 const userPassword = '' // insert walmart password
-const productPathName = encodeURIComponent('/ip/Flash-Card-Multiplication-0-12-Flashcards-Other/206336') // insert the product pathname
+const productPathName = encodeURIComponent('') // insert the product pathname
 const loginPageUrl = `https://www.walmart.com/account/login?returnUrl=${productPathName}`
 // const productPageUrl = 'https://www.walmart.com/ip/Sony-PlayStation-5-Digital-Edition/493824815'
 const productPageUrl = 'https://www.walmart.com/ip/Flash-Card-Multiplication-0-12-Flashcards-Other/206336'
@@ -23,24 +23,29 @@ class Container {
   act({
     type,
     opts
-  }) {
+  }){
     return this[type](opts)
   }
 
-  async rules(stack) {
-    console.log('stack')
-    console.log(stack)
+  async rules(stack){
     const operations = stack.map(this.evaluateRule.bind(this))
-    console.log('got operations')
-    const firstEvaluated = await Promise.any(operations)
+    const firstEvaluated = await Promise.any(operations).catch(e => {
+      console.log('Stack broke here')
+      console.log(stack)
+    })
     return firstEvaluated
   }
-
-  async evaluateRule({ condition, action, goto }) {
-    console.log('evaluating')
-    console.log(condition)
-    console.log(action)
-    console.log(goto)
+  /*
+  condition: {
+    type: "elementExists",
+    opts: {
+      selector: "",
+      disabled: false,
+    },
+    required: true
+  },
+  */
+  async evaluateRule({ condition, action, goto }){
     let evaluated
     if (condition) {
       evaluated = await this.evaluateCondition(condition)
@@ -49,21 +54,22 @@ class Container {
     }
     if (evaluated) {
       await this.performAction(action)
+      console.log('Performed:', action)
+      console.log('Returning:', goto)
       if (goto) return goto
     }
   }
 
-  async evaluateCondition({ type, opts }) {
+  async evaluateCondition({ type, opts }){
     return this[type](opts)
   }
 
-  async performAction({ type, opts }) {
+  async performAction({ type, opts }){
     return this[type](opts)
   }
 
   async launchBrowser(index) {
     try {
-      console.log('LAUNCHING:')
       this.browser = await puppeteer.launch({
         headless: false,
         userDataDir: `~/Documents/Chrome_data/${index}`,
@@ -84,7 +90,6 @@ class Container {
   }
   // Page nav utils
   async goto({ url, opts, pageIndex = 0 } = {}) {
-    console.log('GOTO:', url)
     await this.pages[pageIndex].goto(url, {
       timeout: 0,
       ...opts,
@@ -97,44 +102,52 @@ class Container {
   }
 
   async getButtonWithText({ text, pageIndex = 0, disabled = false } = {}) {
-    console.log('Get button:', text)
-    try {
-      const [button] = await this.pages[pageIndex].$x(`//button[contains(., '${text}')][not(@disabled)]`);
-      console.log('successfully  got  the  button')
-      return button
-    } catch (err) { console.log(err) }
+    let button
+    while (!button) {
+      [button] = await this.pages[pageIndex].$x(`//button[contains(., '${text}')][not(@disabled)]`);
+    }
+    console.log('RETURNING BUTTON')
+    return button
   }
 
   async typeText({ selector, text, pageIndex = 0 } = {}) {
-    console.log('TYPE:', text)
     await this.pages[pageIndex].type(selector, text)
   }
 
-  async pressButton({ text, waitForNavigation, pageIndex = 0 } = {}) {
-    console.log('Press button:', text)
+  async pressButton({ text, waitForNavigation, pageIndex = 0 } = {}){
+    console.log('Pressing button')
     let button = await this.getButtonWithText({ text })
     if (button) {
+      console.log('found button with text:', text)
       await button.click()
     }
     if (waitForNavigation) {
+      console.log('waiting for nav')
       await this.pages[pageIndex].waitForNavigation()
     }
+    console.log('RETURNING PRESS BUTTON')
     return true
   }
 
+  async waitForNavigation({ pageIndex = 0 }) {
+    await this.pages[pageIndex].waitForNavigation()
+  }
+
   async getElement({ element, pageIndex = 0 } = {}) {
-    console.log('Get Element:', element)
-    const pageElement = await this.pages[pageIndex].$(element)
+    let pageElement
+    while (!pageElement) {
+      pageElement = await this.pages[pageIndex].$(element)
+    }
+    console.log('RETURNING ELEMENT')
     return pageElement
   }
 
   async waitForUrlElement({ element, pageIndex = 0 } = {}) {
+    console.log('Waiting for URL element:', element)
     const url = this.pages[pageIndex].url()
-    let counter = 0
-    while (!url.includes(element) && counter < 10) {
+    while (!url.includes(element)) {
       await delay(1000)
       url = this.pages[pageIndex].url()
-      counter++
     }
     return true
   }
@@ -174,7 +187,6 @@ const checkCartFull = async (page) => {
 const checkOutOfStock = async (page) => {
   const isOutOfStock = await page.$('.prod-ProductOffer-oosMsg')
   while (isOutOfStock) {
-    console.log('product is out of stock')
     page.refresh(true)
     await utils.delay(1000)
     timer++
@@ -182,65 +194,37 @@ const checkOutOfStock = async (page) => {
   console.log('product is in stock!!')
 }
 
-// Needs logic  for if we are already signed in
-const login = {
-  goToLoginPage: {
-    condition: null,
-    action: {
-      type: 'goto',
-      opts: {
-        url: loginPageUrl
-      }
-    },
-    goto: ['typeEmail']
+const login = [
+  {
+    type: 'goto',
+    opts: {
+      url: 'https://www.walmart.com/account/login'
+    }
   },
-  typeEmail: {
-    condition: {
-      type: "getElement",
-      opts: {
-        element: '#email'
-      }
-    },
-    action: {
-      type: 'typeText',
-      opts: {
-        selector: '#email',
-        text: userEmail
-      }
-    },
-    goto: ['typePassword']
+  {
+    type: 'typeText',
+    opts: {
+      selector: '#email',
+      text: userEmail
+    }
   },
-  typePassword: {
-    condition: {
-      type: "getElement",
-      opts: {
-        element: '#password'
-      }
-    },
-    action: {
-      type: 'typeText',
-      opts: {
-        selector: '#password',
-        text: userPassword
-      }
-    },
-    goto: ['signIn']
+  {
+    type: 'typeText',
+    opts: {
+      selector: '#password',
+      text: userPassword
+    }
   },
-  signIn: {
-    condition: null,
-    action: {
-      type: 'pressButton',
-      opts: {
-        text: signInText,
-        waitForNavigation: true,
-      }
-    },
-    goto: ['canAddToCart', 'addToCartDisabled']
-  },
-}
+  {
+    type: 'pressButton',
+    opts: {
+      text: signInText,
+      waitForNavigation: true,
+    }
+  }
+]
 
 const config2 = {
-  ...login,
   goToProductPage: {
     condition: null,
     action: {
@@ -249,7 +233,7 @@ const config2 = {
         url: productPageUrl
       }
     },
-    goto: ['canAddToCart', 'addToCartDisabled']
+    goto: ['canAddToCart','addToCartDisabled']
   },
   canAddToCart: {
     condition: {
@@ -263,7 +247,6 @@ const config2 = {
       type: "pressButton",
       opts: {
         text: "Add to cart",
-        waitForNavigation: true
       }
     },
     goto: ['checkCartFull', 'cartFlow1'],
@@ -281,13 +264,6 @@ const config2 = {
     },
     goto: ['canAddToCart', 'addToCartDisabled']
   },
-  waitForNavigationToCart: {
-    condition: null,
-    action: {
-      type: 'waitForNavigation'
-    },
-    goto: ['cartFlow1']
-  },
   checkCartFull: {
     condition: {
       type: "getElement",
@@ -301,7 +277,7 @@ const config2 = {
         url: checkoutPageUrl
       }
     },
-    goto: ['cartFlow1']
+    goto: ['checkoutFlow1']
   },
   cartFlow1: {
     condition: {
@@ -331,6 +307,21 @@ const config2 = {
       opts: {
         text: continueText
       }
+    },
+    goto: ['checkoutFlow2']
+  },
+  checkoutFlow2: {
+    condition: {
+      type: 'getElement',
+      opts: {
+        element: '.address-grid'
+      }
+    },
+    action: {
+      type: 'pressButton',
+      opts: {
+        text: continueText
+      }
     }
   }
   // cartFlow: { ...logic for traversing through cart and checkout }
@@ -340,26 +331,26 @@ const start = async (index) => {
   const container = new Container()
   await container.launchBrowser(index);
   await container.addPage()
-  // maybe check login  somehow?
-  let stack = [config2.login]
-  let counter = 0
-  while (stack.length && counter < 30) {
+  let stack = [config2.goToProductPage]
+  while(stack.length) {
+    console.log('Stack')
+    console.log(stack)
     const result = await container.rules(stack)
-    console.log('result')
+    console.log('RESULT')
     console.log(result)
     if (Array.isArray(result)) {
       stack = result.map(name => config2[name])
     } else if (result) {
       stack = [config2[result]]
     } else {
+      await utils.delay(1000)
       console.log('Done')
     }
-    counter++
   }
 }
 
 (async () => {
-  const limit = 1
+  const limit = 5
   for (let i = 0; i < limit; i++) {
     start(i)
   }
