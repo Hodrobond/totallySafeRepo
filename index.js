@@ -3,7 +3,7 @@ const utils = require('./utils')
 
 const userEmail = '' // insert walmart email
 const userPassword = '' // insert walmart password
-const productPathName = encodeURIComponent('') // insert the product pathname
+const productPathName = encodeURIComponent('/ip/Flash-Card-Multiplication-0-12-Flashcards-Other/206336') // insert the product pathname
 const loginPageUrl = `https://www.walmart.com/account/login?returnUrl=${productPathName}`
 // const productPageUrl = 'https://www.walmart.com/ip/Sony-PlayStation-5-Digital-Edition/493824815'
 const productPageUrl = 'https://www.walmart.com/ip/Flash-Card-Multiplication-0-12-Flashcards-Other/206336'
@@ -23,11 +23,11 @@ class Container {
   act({
     type,
     opts
-  }){
+  }) {
     return this[type](opts)
   }
 
-  async rules(stack){
+  async rules(stack) {
     console.log('stack')
     console.log(stack)
     const operations = stack.map(this.evaluateRule.bind(this))
@@ -35,17 +35,8 @@ class Container {
     const firstEvaluated = await Promise.any(operations)
     return firstEvaluated
   }
-  /*
-  condition: {
-    type: "elementExists",
-    opts: {
-      selector: "",
-      disabled: false,
-    },
-    required: true
-  },
-  */
-  async evaluateRule({ condition, action, goto }){
+
+  async evaluateRule({ condition, action, goto }) {
     console.log('evaluating')
     console.log(condition)
     console.log(action)
@@ -62,11 +53,11 @@ class Container {
     }
   }
 
-  async evaluateCondition({ type, opts }){
+  async evaluateCondition({ type, opts }) {
     return this[type](opts)
   }
 
-  async performAction({ type, opts }){
+  async performAction({ type, opts }) {
     return this[type](opts)
   }
 
@@ -107,8 +98,11 @@ class Container {
 
   async getButtonWithText({ text, pageIndex = 0, disabled = false } = {}) {
     console.log('Get button:', text)
-    const [button] = await this.pages[pageIndex].$x(`//button[contains(., '${text}')][not(@disabled)]`);
-    return button
+    try {
+      const [button] = await this.pages[pageIndex].$x(`//button[contains(., '${text}')][not(@disabled)]`);
+      console.log('successfully  got  the  button')
+      return button
+    } catch (err) { console.log(err) }
   }
 
   async typeText({ selector, text, pageIndex = 0 } = {}) {
@@ -116,7 +110,7 @@ class Container {
     await this.pages[pageIndex].type(selector, text)
   }
 
-  async pressButton({ text, waitForNavigation, pageIndex = 0 } = {}){
+  async pressButton({ text, waitForNavigation, pageIndex = 0 } = {}) {
     console.log('Press button:', text)
     let button = await this.getButtonWithText({ text })
     if (button) {
@@ -136,9 +130,11 @@ class Container {
 
   async waitForUrlElement({ element, pageIndex = 0 } = {}) {
     const url = this.pages[pageIndex].url()
-    while (!url.includes(element)) {
+    let counter = 0
+    while (!url.includes(element) && counter < 10) {
       await delay(1000)
       url = this.pages[pageIndex].url()
+      counter++
     }
     return true
   }
@@ -186,47 +182,65 @@ const checkOutOfStock = async (page) => {
   console.log('product is in stock!!')
 }
 
-const login = [
-  {
-    type: 'goto',
-    opts: {
-      url: 'https://www.walmart.com/account/login'
-    }
-  },
-  {
-    type: 'typeText',
-    opts: {
-      selector: '#email',
-      text: userEmail
-    }
-  },
-  {
-    type: 'typeText',
-    opts: {
-      selector: '#password',
-      text: userPassword
-    }
-  },
-  {
-    type: 'pressButton',
-    opts: {
-      text: signInText,
-      waitForNavigation: true,
-    }
-  }
-]
-
-const config2 = {
-  goToProductPage: {
+// Needs logic  for if we are already signed in
+const login = {
+  goToLoginPage: {
     condition: null,
     action: {
       type: 'goto',
       opts: {
-        url: productPageUrl
+        url: loginPageUrl
       }
     },
-    goto: ['canAddToCart','addToCartDisabled']
+    goto: ['typeEmail']
   },
+  typeEmail: {
+    condition: {
+      type: "getElement",
+      opts: {
+        element: '#email'
+      }
+    },
+    action: {
+      type: 'typeText',
+      opts: {
+        selector: '#email',
+        text: userEmail
+      }
+    },
+    goto: ['typePassword']
+  },
+  typePassword: {
+    condition: {
+      type: "getElement",
+      opts: {
+        element: '#password'
+      }
+    },
+    action: {
+      type: 'typeText',
+      opts: {
+        selector: '#password',
+        text: userPassword
+      }
+    },
+    goto: ['signIn']
+  },
+  signIn: {
+    condition: null,
+    action: {
+      type: 'pressButton',
+      opts: {
+        text: signInText,
+        waitForNavigation: true,
+      }
+    },
+    goto: ['canAddToCart', 'addToCartDisabled']
+  },
+}
+
+const config2 = {
+  ...login,
   canAddToCart: {
     condition: {
       type: "getButtonWithText",
@@ -316,8 +330,9 @@ const start = async (index) => {
   const container = new Container()
   await container.launchBrowser(index);
   await container.addPage()
-  let stack = [config2.goToProductPage]
-  while(stack.length) {
+  let stack = [config2.goToLoginPage]
+  let counter = 0
+  while (stack.length && counter < 30) {
     const result = await container.rules(stack)
     console.log('result')
     console.log(result)
@@ -328,6 +343,7 @@ const start = async (index) => {
     } else {
       console.log('Done')
     }
+    counter++
   }
 }
 
