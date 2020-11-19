@@ -34,6 +34,7 @@ class Container {
     console.log('got operations')
     const firstEvaluated = await Promise.any(operations)
     return firstEvaluated
+
   }
 
   async evaluateRule({ condition, action, goto }) {
@@ -341,7 +342,7 @@ const start = async (index) => {
   await container.launchBrowser(index);
   await container.addPage()
   // maybe check login  somehow?
-  let stack = [config2.login]
+  let stack = [config2.goToLoginPage]
   let counter = 0
   while (stack.length && counter < 30) {
     const result = await container.rules(stack)
